@@ -45,6 +45,14 @@ const EncryptionSimulator = () => {
     if (mode === 'symmetric') setWorkflowStep('key_setup');
   };
 
+  const handleMessageChange = (e) => {
+    setMessage(e.target.value);
+    if (currentStage === 'done') {
+      setCurrentStage('idle');
+      setEncryptedText('');
+    }
+  };
+
   const transmitKey = () => {
     setWorkflowStep('key_exchanging');
     setTimeout(() => {
@@ -54,7 +62,8 @@ const EncryptionSimulator = () => {
   };
 
   const startAnimation = () => {
-    if (currentStage !== 'idle') return;
+    if (currentStage !== 'idle' && currentStage !== 'done') return;
+    
     setWorkflowStep('message_sending');
     setCurrentStage('encrypting');
     setEncryptedText(simulateEncryption());
@@ -73,7 +82,7 @@ const EncryptionSimulator = () => {
   const simulateEncryption = () => {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
-    for (let i = 0; i < 4; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < message.length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
     return result;
   };
 
@@ -81,9 +90,13 @@ const EncryptionSimulator = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setCurrentStage('idle');
     setEncryptedText('');
+    setMessage('Hello');
     if (mode === 'symmetric') {
-        setIsKeyExchanged(false);
-        setWorkflowStep('key_setup');
+        if (isKeyExchanged) {
+            setWorkflowStep('ready_for_message');
+        } else {
+            setWorkflowStep('key_setup');
+        }
     }
   };
 
@@ -200,15 +213,15 @@ const EncryptionSimulator = () => {
                 <span style={{ fontWeight: 600, color: '#64748b' }}>Data:</span>
                 <input 
                   type="text" className="key-input" style={{ width: '250px' }}
-                  value={message} onChange={(e) => setMessage(e.target.value)}
+                  value={message} onChange={handleMessageChange}
                   placeholder="Enter secure message..."
-                  disabled={currentStage !== 'idle'}
+                  disabled={currentStage !== 'idle' && currentStage !== 'done'}
                 />
               </div>
               
               <button 
                 className="btn btn-primary" onClick={startAnimation}
-                disabled={currentStage !== 'idle' || isSymmetricAndNotExchanged}
+                disabled={(currentStage !== 'idle' && currentStage !== 'done') || isSymmetricAndNotExchanged}
               >
                 <Send size={18} style={{ marginRight: '8px' }} />
                 Send Secure Message
