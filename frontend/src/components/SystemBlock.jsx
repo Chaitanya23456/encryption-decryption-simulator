@@ -9,7 +9,9 @@ const SystemBlock = ({
   isSender = false, 
   status = 'idle', // 'idle', 'secure', 'encrypting', 'decrypting'
   standby = false,
-  messageLabel = "Message"
+  messageLabel = "Message",
+  secondaryMessage = null,
+  secondaryLabel = null
 }) => {
   return (
     <div className={`system-block ${standby ? 'standby' : ''}`}>
@@ -33,6 +35,15 @@ const SystemBlock = ({
           )}
         </div>
       </div>
+
+      {secondaryLabel && (
+        <div className="message-box" style={{ marginTop: '15px' }}>
+          <span className="message-label">{secondaryLabel}</span>
+          <div className="message-content">
+            {secondaryMessage || <span style={{ color: '#cbd5e1' }}>Empty</span>}
+          </div>
+        </div>
+      )}
       
       <div className="keys-container">
         {keys.map((key, index) => (

@@ -46,6 +46,10 @@ const EncryptionSimulator = () => {
   };
 
   const handleMessageChange = (e) => {
+    if (mode === 'symmetric' && !isKeyExchanged) {
+        setKeys(prev => ({...prev, session: e.target.value}));
+        return;
+    }
     setMessage(e.target.value);
     if (currentStage === 'done') {
       setCurrentStage('idle');
@@ -100,6 +104,15 @@ const EncryptionSimulator = () => {
     }
   };
 
+  const endSession = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setCurrentStage('idle');
+    setEncryptedText('');
+    setMessage('Hello');
+    setIsKeyExchanged(false);
+    setWorkflowStep('key_setup');
+  };
+
   const positions = {
     start: { x: -460, y: -50 },
     mid: { x: 0, y: -120 },
@@ -120,7 +133,7 @@ const EncryptionSimulator = () => {
     { id: 'session', label: 'Session key', type: 'key-session', value: keys.session }
   ];
 
-  const isSymmetricAndNotExchanged = mode === 'symmetric' && !isKeyExchanged;
+  const isSymmetricInitial = mode === 'symmetric' && !isKeyExchanged;
 
   return (
     <div className="app-container">
@@ -144,26 +157,29 @@ const EncryptionSimulator = () => {
         <div className="simulation-grid" style={{ gap: '6rem' }}>
           <SystemBlock 
             title="System A (Sender)"
-            message={currentStage === 'idle' || currentStage === 'encrypting' ? message : ''}
-            keys={mode === 'asymmetric' ? asymmetricKeysA : symmetricKeys}
+            message={mode === 'symmetric' ? keys.session : message}
+            messageLabel={mode === 'symmetric' ? "SESSION KEY" : "MESSAGE"}
+            secondaryLabel={(mode === 'symmetric' && isKeyExchanged) ? "MESSAGE" : null}
+            secondaryMessage={(mode === 'symmetric' && isKeyExchanged) ? (currentStage === 'idle' || currentStage === 'encrypting' || currentStage === 'done' ? message : '') : null}
+            keys={mode === 'asymmetric' ? asymmetricKeysA : [...symmetricKeys, ...asymmetricKeysA]}
             onKeyChange={(id, val) => setKeys(prev => ({...prev, [id]: val}))}
             isSender={true}
             status={isKeyExchanged || mode === 'asymmetric' ? 'secure' : 'idle'}
-            standby={isSymmetricAndNotExchanged}
+            standby={false}
           />
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', position: 'relative' }}>
             <div style={{ position: 'relative', width: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div className={`status-label-top ${currentStage === 'encrypting' ? 'active-step' : ''}`} 
-                     style={{ color: currentStage === 'encrypting' ? '#3b82f6' : '#94a3b8', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' }}>
-                    {mode === 'asymmetric' ? 'Encrypting (using Public Key B)' : 'Encrypting (using Session Key)'}
+                <div className={`status-label-top ${currentStage === 'encrypting' || workflowStep === 'key_exchanging' ? 'active-step' : ''}`} 
+                     style={{ color: (currentStage === 'encrypting' || workflowStep === 'key_exchanging') ? '#3b82f6' : '#94a3b8', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' }}>
+                    {(mode === 'asymmetric' || (mode === 'symmetric' && !isKeyExchanged)) ? 'Encrypting (using Public Key B)' : 'Encrypting (using Session Key)'}
                 </div>
                 
                 <NetworkCloud label="Network" />
                 
-                <div className={`status-label-bottom ${currentStage === 'decrypting' ? 'active-step' : ''}`}
-                     style={{ textAlign: 'center', marginTop: '10px', color: currentStage === 'decrypting' ? '#3b82f6' : '#94a3b8', fontWeight: 'bold' }}>
-                    {mode === 'asymmetric' ? 'Decrypting (using Private Key B)' : 'Decrypting (using Session Key)'}
+                <div className={`status-label-bottom ${currentStage === 'decrypting' || workflowStep === 'key_exchanging' ? 'active-step' : ''}`}
+                     style={{ textAlign: 'center', marginTop: '10px', color: (currentStage === 'decrypting' || workflowStep === 'key_exchanging') ? '#3b82f6' : '#94a3b8', fontWeight: 'bold' }}>
+                    {(mode === 'asymmetric' || (mode === 'symmetric' && !isKeyExchanged)) ? 'Decrypting (using Private Key B)' : 'Decrypting (using Session Key)'}
                 </div>
             </div>
             
@@ -182,60 +198,109 @@ const EncryptionSimulator = () => {
 
           <SystemBlock 
             title="System B (Receiver)"
-            message={currentStage === 'done' ? message : ''}
-            keys={mode === 'asymmetric' ? asymmetricKeysB : symmetricKeys}
+            message={mode === 'symmetric' ? (isKeyExchanged ? keys.session : '') : (currentStage === 'done' ? message : '')}
+            messageLabel={mode === 'symmetric' ? "SESSION KEY" : "MESSAGE"}
+            secondaryLabel={(mode === 'symmetric' && isKeyExchanged) ? "MESSAGE" : null}
+            secondaryMessage={(mode === 'symmetric' && isKeyExchanged) ? (currentStage === 'done' ? message : '') : null}
+            keys={mode === 'asymmetric' ? asymmetricKeysB : [...symmetricKeys, ...asymmetricKeysB]}
             onKeyChange={(id, val) => setKeys(prev => ({...prev, [id]: val}))}
             status={isKeyExchanged || mode === 'asymmetric' ? 'secure' : 'idle'}
-            standby={isSymmetricAndNotExchanged}
+            standby={false}
           />
         </div>
 
         <div className="controls-section">
-          {mode === 'symmetric' && (
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <button 
-                className={`btn ${isKeyExchanged ? 'btn-secondary' : 'btn-primary'}`} 
-                onClick={transmitKey}
-                disabled={isKeyExchanged || workflowStep === 'key_exchanging'}
-              >
-                <Link size={18} style={{ marginRight: '8px' }} />
-                {isKeyExchanged ? 'Key Exchanged' : 'Establish Secure Channel'}
-              </button>
-            </div>
-          )}
-
-          {!isSymmetricAndNotExchanged && (
-            <motion.div 
-               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-               style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: '2rem' }}>
-                <span style={{ fontWeight: 600, color: '#64748b' }}>Data:</span>
-                <input 
-                  type="text" className="key-input" style={{ width: '250px' }}
-                  value={message} onChange={handleMessageChange}
-                  placeholder="Enter secure message..."
-                  disabled={currentStage !== 'idle' && currentStage !== 'done'}
-                />
-              </div>
-              
-              <button 
-                className="btn btn-primary" onClick={startAnimation}
-                disabled={(currentStage !== 'idle' && currentStage !== 'done') || isSymmetricAndNotExchanged}
-              >
-                <Send size={18} style={{ marginRight: '8px' }} />
-                Send Secure Message
-              </button>
-            </motion.div>
-          )}
+          <motion.div 
+             initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+             style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flex: 1, flexWrap: 'wrap' }}
+          >
+            {mode === 'symmetric' ? (
+              <>
+                {!isKeyExchanged ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '2rem' }}>
+                      <span style={{ fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>Session Key:</span>
+                      <input 
+                        type="text" className="key-input" style={{ width: '150px' }}
+                        value={keys.session} 
+                        onChange={(e) => setKeys(prev => ({...prev, session: e.target.value}))}
+                        placeholder="Enter key..."
+                        disabled={workflowStep === 'key_exchanging'}
+                      />
+                    </div>
+                    <button 
+                      className="btn btn-primary" onClick={transmitKey}
+                      disabled={workflowStep === 'key_exchanging'}
+                    >
+                      <Link size={18} style={{ marginRight: '8px' }} />
+                      Transfer Key
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '2rem' }}>
+                      <span style={{ fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>Data:</span>
+                      <input 
+                        type="text" className="key-input" style={{ width: '250px' }}
+                        value={message} 
+                        onChange={handleMessageChange}
+                        placeholder="Enter message..."
+                        disabled={(currentStage !== 'idle' && currentStage !== 'done')}
+                      />
+                    </div>
+                    <button 
+                      className="btn btn-primary" onClick={startAnimation}
+                      disabled={(currentStage !== 'idle' && currentStage !== 'done')}
+                    >
+                      <Send size={18} style={{ marginRight: '8px' }} />
+                      Send Message
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              // Asymmetric Mode
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: '2rem' }}>
+                  <span style={{ fontWeight: 600, color: '#64748b' }}>Data:</span>
+                  <input 
+                    type="text" className="key-input" style={{ width: '250px' }}
+                    value={message} 
+                    onChange={handleMessageChange}
+                    placeholder="Enter secure message..."
+                    disabled={(currentStage !== 'idle' && currentStage !== 'done')}
+                  />
+                </div>
+                <button 
+                  className="btn btn-primary" onClick={startAnimation}
+                  disabled={(currentStage !== 'idle' && currentStage !== 'done')}
+                >
+                  <Send size={18} style={{ marginRight: '8px' }} />
+                  Send Secure Message
+                </button>
+              </>
+            )}
+          </motion.div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '1rem' }}>
             <button className="btn btn-secondary" onClick={generateRandomKeys} title="Regenerate Keys">
               <RefreshCw size={18} />
             </button>
-            <button className="btn btn-secondary" onClick={reset} title="Reset Simulation">
-              <Trash2 size={18} />
-            </button>
+            
+            {mode === 'symmetric' && isKeyExchanged ? (
+              <button 
+                className="btn btn-secondary" 
+                onClick={endSession} 
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 16px', color: '#ef4444', borderColor: '#ef4444' }}
+              >
+                <Trash2 size={18} />
+                End Session
+              </button>
+            ) : (
+              <button className="btn btn-secondary" onClick={reset} title="Reset Simulation">
+                <Trash2 size={18} />
+              </button>
+            )}
           </div>
         </div>
 
